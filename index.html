@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Dice</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{
+  --bg:#090d16;--s1:#121927;--s2:#1a2336;--s3:#243049;
+  --text:#eef2ff;--muted:#7f8ba6;
+  --under:#ffb020;--over:#27e0a3;--win:#34d399;--lose:#fb7185;
+  --accent:#ffb020;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;overflow-x:hidden;max-width:100%;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
+  -webkit-font-smoothing:antialiased;overscroll-behavior:none}
+body{padding:env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 24px)}
+.app{max-width:480px;margin:0 auto;padding:12px 16px 0}
+button{font:inherit;color:inherit;border:0;cursor:pointer}
+button:active{transform:scale(.97)}
+button:disabled{opacity:.45;pointer-events:none}
+
+/* header */
+.top{display:flex;align-items:center;gap:10px}
+.avatar{width:38px;height:38px;border-radius:12px;background:linear-gradient(135deg,var(--under),#ff6b6b);
+  display:grid;place-items:center;font-weight:800;color:#1b1200;flex:none}
+.who{min-width:0;flex:1}
+.who b{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.who span{font-size:11px;color:var(--muted)}
+.bal{background:var(--s1);border:1px solid var(--s3);border-radius:14px;padding:8px 12px;font-weight:700;
+  font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:6px}
+.bonus{background:var(--s1);border:1px solid var(--s3);border-radius:14px;padding:8px 11px;font-size:13px;font-weight:600;
+  font-variant-numeric:tabular-nums}
+.bonus.ready{background:linear-gradient(135deg,var(--under),#ff7a45);color:#1b1200;border-color:transparent;
+  animation:pulse 1.8s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,176,32,.45)}50%{box-shadow:0 0 0 7px rgba(255,176,32,0)}}
+
+/* result */
+.hero{text-align:center;margin:26px 0 8px}
+.num{font-size:64px;font-weight:800;letter-spacing:2px;font-variant-numeric:tabular-nums;line-height:1;
+  transition:color .2s}
+.num.win{color:var(--win)}.num.lose{color:var(--lose)}
+.sub{margin-top:10px;color:var(--muted);font-size:14px;min-height:20px}
+.sub b{color:var(--text)}
+.sub .pos{color:var(--win)}.sub .neg{color:var(--lose)}
+
+/* track */
+.trackwrap{margin:26px 0 6px;position:relative;padding-top:30px}
+.track{position:relative;height:16px;border-radius:9px;background:var(--s2);overflow:hidden}
+.zone{position:absolute;top:0;bottom:0;transition:width .12s}
+.zone.u{left:0;background:linear-gradient(90deg,#ff7a45,var(--under))}
+.zone.o{right:0;background:linear-gradient(270deg,#13b985,var(--over))}
+.marker{position:absolute;top:0;width:0;transition:left .45s cubic-bezier(.2,.9,.25,1.1);left:50%;opacity:0}
+.marker.show{opacity:1}
+.marker i{position:absolute;top:30px;left:-2px;width:4px;height:22px;border-radius:3px;background:#fff;
+  box-shadow:0 0 10px rgba(255,255,255,.8)}
+.marker em{position:absolute;top:0;left:0;transform:translateX(-50%);font-style:normal;font-size:12px;font-weight:700;
+  background:#fff;color:#0b1020;border-radius:8px;padding:3px 7px;white-space:nowrap}
+.ranges{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:10px;
+  font-variant-numeric:tabular-nums}
+.ranges .u{color:var(--under)}.ranges .o{color:var(--over)}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:30px;background:transparent;margin:6px 0 0}
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:var(--s3)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;border-radius:50%;
+  background:#fff;margin-top:-11px;box-shadow:0 2px 8px rgba(0,0,0,.5)}
+input[type=range]::-moz-range-track{height:4px;border-radius:2px;background:var(--s3)}
+input[type=range]::-moz-range-thumb{width:26px;height:26px;border:0;border-radius:50%;background:#fff}
+
+/* controls */
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;margin-top:14px}
+.field{min-width:0}
+.field label{display:block;color:var(--muted);font-size:13px;margin:0 0 6px 2px}
+.inp{display:flex;align-items:center;background:var(--s1);border:1px solid var(--s3);border-radius:14px;padding:0 12px;height:52px}
+.inp:focus-within{border-color:var(--accent)}
+.inp input{flex:1;min-width:0;width:100%;background:transparent;border:0;outline:0;color:var(--text);font:inherit;font-size:20px;font-weight:700;
+  font-variant-numeric:tabular-nums}
+.inp span{color:var(--muted);font-weight:600;font-size:13px}
+.chips{display:flex;gap:6px;margin-top:6px}
+.chips button{flex:1;height:34px;border-radius:10px;background:var(--s1);color:var(--muted);font-weight:700;font-size:13px}
+.play{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;margin-top:16px}
+.play button{height:58px;border-radius:16px;font-size:17px;font-weight:800;color:#0a0f1a}
+.play .u{background:linear-gradient(135deg,#ff7a45,var(--under))}
+.play .o{background:linear-gradient(135deg,#13b985,var(--over))}
+.play small{display:block;font-size:11px;font-weight:600;opacity:.75;margin-top:1px}
+
+/* tabs / history */
+.sechead{display:flex;justify-content:space-between;align-items:center;margin:26px 0 8px}
+.sechead h3{margin:0;font-size:17px}
+.tabs{display:flex;gap:14px;font-size:14px;font-weight:600}
+.tabs button{background:none;color:var(--muted);padding:2px 0}
+.tabs button.on{color:var(--text)}
+.list{background:var(--s1);border-radius:18px;overflow:hidden}
+.row{display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid #0e1422}
+.row:last-child{border:0}
+.row .av{width:36px;height:36px;border-radius:11px;background:var(--s3);display:grid;place-items:center;font-weight:800;
+  font-size:14px;flex:none}
+.row .mid{flex:1;min-width:0}
+.row .mid b{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .mid span{font-size:12px;color:var(--muted)}
+.row .ch{background:var(--s2);border-radius:10px;padding:3px 9px;font-size:12px;color:var(--muted);text-align:center;flex:none}
+.row .ch.w{background:#14324a;color:#cfe9ff}
+.row .amt{text-align:right;flex:none;min-width:78px;font-weight:700;font-size:14px;font-variant-numeric:tabular-nums}
+.row .amt.w{color:var(--win)}.row .amt.l{color:var(--lose)}
+.row .amt small{display:block;color:var(--muted);font-weight:500;font-size:11px}
+.empty{padding:22px;text-align:center;color:var(--muted);font-size:14px}
+
+.foot{display:flex;gap:10px;margin-top:16px}
+.foot button{flex:1;height:46px;border-radius:14px;background:var(--s1);border:1px solid var(--s3);font-weight:600;font-size:14px}
+.note{color:var(--muted);font-size:11px;text-align:center;margin:16px 6px 0;line-height:1.45}
+
+/* sheet */
+.back{position:fixed;inset:0;background:rgba(0,0,0,.6);opacity:0;pointer-events:none;transition:opacity .2s;z-index:10}
+.back.on{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;max-width:480px;margin:0 auto;background:var(--s1);
+  border-radius:24px 24px 0 0;padding:18px 18px calc(env(safe-area-inset-bottom) + 20px);max-height:86vh;overflow:auto;
+  transform:translateY(105%);visibility:hidden;transition:transform .28s cubic-bezier(.2,.9,.3,1),visibility 0s .28s;z-index:11}
+.sheet.on{transform:none;visibility:visible;transition:transform .28s cubic-bezier(.2,.9,.3,1),visibility 0s}
+.sheet h2{margin:0 0 12px;font-size:20px;display:flex;justify-content:space-between;align-items:center}
+.sheet h2 button{background:var(--s2);width:34px;height:34px;border-radius:11px;font-size:16px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+.stat{background:var(--s2);border-radius:14px;padding:12px}
+.stat b{display:block;font-size:19px;font-variant-numeric:tabular-nums}
+.stat span{font-size:12px;color:var(--muted)}
+.p{color:var(--muted);font-size:13px;line-height:1.5;margin:10px 0}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;word-break:break-all;background:var(--s2);
+  border-radius:12px;padding:10px;margin:4px 0 10px;color:#cfd8f3}
+.lbl{font-size:12px;color:var(--muted);margin-top:6px}
+.big{width:100%;height:50px;border-radius:14px;background:var(--accent);color:#1b1200;font-weight:800;font-size:16px;margin-top:8px}
+.sheet .inp{height:46px;margin:4px 0 6px}
+.sheet .inp input{font-size:15px;font-weight:600}
+
+.toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 14px);transform:translate(-50%,-90px);background:#2a1b22;
+  color:#ffd2da;border:1px solid #5a2a38;border-radius:14px;padding:10px 16px;font-size:14px;z-index:30;
+  transition:transform .25s;max-width:90%;text-align:center}
+.toast.on{transform:translate(-50%,0)}
+.toast.ok{background:#12301f;color:#c6f6d9;border-color:#1f5a3a}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="avatar" id="avatar">D</div>
+    <div class="who"><b id="name">…</b><span>Монеты</span></div>
+    <div class="bal">🪙 <span id="bal">0.00</span></div>
+    <button class="bonus" id="bonus">🎁</button>
+  </div>
+
+  <div class="hero">
+    <div class="num" id="num">000000</div>
+    <div class="sub" id="sub"></div>
+  </div>
+
+  <div class="trackwrap">
+    <div class="marker" id="marker"><em id="mlabel">0</em><i></i></div>
+    <div class="track"><div class="zone u" id="zu"></div><div class="zone o" id="zo"></div></div>
+    <input type="range" id="slider" min="1" max="95" value="50" aria-label="Шанс">
+    <div class="ranges"><span class="u" id="ru"></span><span class="o" id="ro"></span></div>
+  </div>
+
+  <div class="grid">
+    <div class="field">
+      <label>Сумма</label>
+      <div class="inp"><input id="bet" inputmode="decimal" autocomplete="off" value="1.00"><span>🪙</span></div>
+      <div class="chips"><button data-b="half">½</button><button data-b="dbl">×2</button><button data-b="max">MAX</button></div>
+    </div>
+    <div class="field">
+      <label>Шанс</label>
+      <div class="inp"><input id="chance" inputmode="numeric" autocomplete="off" value="50"><span>%</span></div>
+      <div class="chips"><button data-c="-5">−5</button><button data-c="5">+5</button><button data-c="max">MAX</button></div>
+    </div>
+  </div>
+
+  <div class="play">
+    <button class="u" id="under">⬇ Меньше<small id="uhint"></small></button>
+    <button class="o" id="over">⬆ Больше<small id="ohint"></small></button>
+  </div>
+
+  <div class="sechead">
+    <h3>Последние игры</h3>
+    <div class="tabs"><button class="on" data-s="all">Все</button><button data-s="mine">Мои</button></div>
+  </div>
+  <div class="list" id="list"><div class="empty">Загрузка…</div></div>
+
+  <div class="foot">
+    <button id="btnProfile">👤 Профиль</button>
+    <button id="btnFair">🔒 Честная игра</button>
+  </div>
+  <p class="note">Игровая валюта не имеет денежной стоимости: пополнение и вывод недоступны.</p>
+</div>
+
+<div class="back" id="back"></div>
+<div class="sheet" id="sheet"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const tg = window.Telegram && window.Telegram.WebApp;
+if (tg) {
+  tg.ready(); tg.expand();
+  try { tg.setHeaderColor('#090d16'); tg.setBackgroundColor('#090d16'); } catch (e) {}
+}
+const initData = tg ? tg.initData : '';
+const devUser = new URLSearchParams(location.search).get('dev');
+
+async function api(path, body) {
+  const headers = {'Content-Type': 'application/json', 'X-Init-Data': initData};
+  if (devUser) headers['X-Dev-User'] = devUser;
+  const r = await fetch(path, {method: body === undefined ? 'GET' : 'POST', headers,
+    body: body === undefined ? undefined : JSON.stringify(body)});
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || 'Ошибка запроса');
+  return data;
+}
+
+const $ = id => document.getElementById(id);
+const fmt = u => (u / 100).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const pad = n => String(n).padStart(6, '0');
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const haptic = (kind, type) => { try { tg && tg.HapticFeedback[kind](type); } catch (e) {} };
+
+let me = null, bet = 100, chance = 50, busy = false, scope = 'all', bonusLeft = 0;
+
+function toast(msg, ok) {
+  const t = $('toast'); t.textContent = msg; t.className = 'toast on' + (ok ? ' ok' : '');
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.className = 'toast', 2600);
+}
+
+function mult() { return me.rtp / chance; }
+function winAmount() { return Math.floor(bet * me.rtp / chance); }
+
+function renderControls() {
+  const t = chance * 10000;
+  $('zu').style.width = chance + '%'; $('zo').style.width = chance + '%';
+  $('ru').textContent = '⬇ 0 – ' + (t - 1);
+  $('ro').textContent = (1000000 - t) + ' – 999999 ⬆';
+  $('slider').value = chance;
+  if (document.activeElement !== $('chance')) $('chance').value = chance;
+  if (document.activeElement !== $('bet')) $('bet').value = (bet / 100).toFixed(2);
+  $('uhint').textContent = $('ohint').textContent = '×' + mult().toFixed(2);
+  if (!busy) $('sub').innerHTML = 'Возможный выигрыш: <b>' + fmt(winAmount()) + '</b> 🪙';
+}
+
+function renderMe() {
+  $('name').textContent = me.name;
+  $('avatar').textContent = (me.name || 'D').trim().charAt(0).toUpperCase();
+  $('bal').textContent = fmt(me.balance);
+  renderBonus();
+  renderControls();
+}
+
+function renderBonus() {
+  const b = $('bonus');
+  if (bonusLeft <= 0) { b.className = 'bonus ready'; b.textContent = '🎁 +' + fmt(me.bonus_amount); }
+  else {
+    const h = Math.floor(bonusLeft / 3600), m = Math.floor(bonusLeft % 3600 / 60);
+    b.className = 'bonus'; b.textContent = '🎁 ' + h + ':' + String(m).padStart(2, '0');
+  }
+}
+setInterval(() => { if (me && bonusLeft > 0) { bonusLeft--; renderBonus(); } }, 1000);
+
+async function loadMe() {
+  me = await api('/api/me');
+  bonusLeft = me.bonus_left;
+  bet = Math.min(Math.max(bet, me.min_bet), Math.max(me.balance, me.min_bet));
+  renderMe();
+}
+
+function ago(ts) {
+  const s = Math.max(0, Date.now() / 1000 - ts);
+  if (s < 60) return 'сейчас';
+  if (s < 3600) return Math.floor(s / 60) + ' мин';
+  if (s < 86400) return Math.floor(s / 3600) + ' ч';
+  return Math.floor(s / 86400) + ' дн';
+}
+
+async function loadHistory() {
+  const {games} = await api('/api/history?scope=' + scope);
+  const el = $('list');
+  if (!games.length) { el.innerHTML = '<div class="empty">Пока пусто. Сделай первую ставку!</div>'; return; }
+  el.innerHTML = games.map(g => {
+    const m = (g.payout / g.bet).toFixed(2);
+    const profit = g.win ? '+' + fmt(g.payout - g.bet) : '−' + fmt(g.bet);
+    return '<div class="row"><div class="av">' + esc((g.name || '?').charAt(0).toUpperCase()) + '</div>' +
+      '<div class="mid"><b>' + esc(g.name) + '</b><span>' + (g.direction === 'under' ? 'Меньше' : 'Больше') +
+      (g.win ? ' ×' + m : '') + '</span></div>' +
+      '<div class="ch ' + (g.win ? 'w' : '') + '">шанс<br><b>' + g.chance + '%</b></div>' +
+      '<div class="amt ' + (g.win ? 'w' : 'l') + '">' + profit + '<small>' + pad(g.number) + ' · ' + ago(g.ts) + '</small></div></div>';
+  }).join('');
+}
+
+function setBusy(v) { busy = v; $('under').disabled = $('over').disabled = v; }
+
+async function play(direction) {
+  if (busy) return;
+  if (bet < me.min_bet) return toast('Минимальная ставка: ' + fmt(me.min_bet));
+  if (bet > me.balance) return toast('Недостаточно монет');
+  setBusy(true); haptic('impactOccurred', 'light');
+  $('marker').classList.remove('show'); $('num').className = 'num'; $('sub').textContent = 'Бросаем…';
+  const flick = setInterval(() => { $('num').textContent = pad(Math.floor(Math.random() * 1e6)); }, 55);
+  try {
+    const [res] = await Promise.all([api('/api/play', {bet, chance, direction}), sleep(600)]);
+    clearInterval(flick);
+    $('num').textContent = pad(res.number);
+    $('num').className = 'num ' + (res.win ? 'win' : 'lose');
+    const mk = $('marker'); mk.style.left = (res.number / 1e6 * 100) + '%';
+    $('mlabel').textContent = res.number; mk.classList.add('show');
+    me.balance = res.balance; $('bal').textContent = fmt(me.balance);
+    haptic('notificationOccurred', res.win ? 'success' : 'error');
+    if (bet > me.balance) bet = Math.max(me.min_bet, me.balance);
+    setBusy(false); renderControls();
+    $('sub').innerHTML = res.win
+      ? '<span class="pos">+' + fmt(res.payout - res.bet) + ' 🪙 · выигрыш!</span>'
+      : '<span class="neg">−' + fmt(res.bet) + ' 🪙</span>';
+    loadHistory();
+  } catch (e) {
+    clearInterval(flick); setBusy(false); $('num').textContent = '000000'; renderControls();
+    toast(e.message);
+  }
+}
+
+// ---- controls
+function setBet(units) {
+  bet = Math.max(0, Math.round(units)); renderControls();
+}
+document.querySelectorAll('[data-b]').forEach(b => b.onclick = () => {
+  const k = b.dataset.b;
+  if (k === 'half') setBet(Math.max(me.min_bet, Math.floor(bet / 2)));
+  if (k === 'dbl') setBet(Math.min(Math.max(me.balance, me.min_bet), bet * 2));
+  if (k === 'max') setBet(me.balance);
+  $('bet').value = (bet / 100).toFixed(2); haptic('selectionChanged');
+});
+document.querySelectorAll('[data-c]').forEach(b => b.onclick = () => {
+  const k = b.dataset.c;
+  chance = k === 'max' ? me.max_chance : Math.min(me.max_chance, Math.max(me.min_chance, chance + Number(k)));
+  renderControls(); haptic('selectionChanged');
+});
+$('slider').addEventListener('input', e => { chance = Number(e.target.value); renderControls(); });
+$('bet').addEventListener('input', e => {
+  const v = parseFloat(e.target.value.replace(',', '.'));
+  bet = isNaN(v) ? 0 : Math.round(v * 100);
+  $('uhint').textContent = $('ohint').textContent = '×' + mult().toFixed(2);
+  if (!busy) $('sub').innerHTML = 'Возможный выигрыш: <b>' + fmt(winAmount()) + '</b> 🪙';
+});
+$('bet').addEventListener('blur', () => { renderControls(); $('bet').value = (bet / 100).toFixed(2); });
+$('chance').addEventListener('input', e => {
+  const v = parseInt(e.target.value, 10);
+  if (!isNaN(v)) { chance = Math.min(me.max_chance, Math.max(me.min_chance, v)); renderControls(); }
+});
+$('chance').addEventListener('blur', () => { $('chance').value = chance; });
+$('under').onclick = () => play('under');
+$('over').onclick = () => play('over');
+
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+  scope = b.dataset.s;
+  document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b));
+  loadHistory();
+});
+
+$('bonus').onclick = async () => {
+  try {
+    const r = await api('/api/bonus', {});
+    me.balance = r.balance; bonusLeft = 86400; $('bal').textContent = fmt(me.balance);
+    renderBonus(); toast('Бонус +' + fmt(r.bonus) + ' 🪙', true); haptic('notificationOccurred', 'success');
+  } catch (e) { toast(e.message); }
+};
+
+// ---- sheets
+function openSheet(html) {
+  $('sheet').innerHTML = html; $('sheet').classList.add('on'); $('back').classList.add('on');
+  const c = $('sheet').querySelector('[data-close]'); if (c) c.onclick = closeSheet;
+}
+function closeSheet() { $('sheet').classList.remove('on'); $('back').classList.remove('on'); }
+$('back').onclick = closeSheet;
+
+$('btnProfile').onclick = async () => {
+  await loadMe();
+  const s = me.stats, d = new Date(me.joined * 1000).toLocaleDateString('ru-RU');
+  openSheet('<h2>Профиль <button data-close>✕</button></h2>' +
+    '<div class="p">' + esc(me.name) + (me.username ? ' · @' + esc(me.username) : '') + '<br>В игре с ' + d + '</div>' +
+    '<div class="stat"><b>🪙 ' + fmt(me.balance) + '</b><span>Баланс</span></div>' +
+    '<div class="stats"><div class="stat"><b>' + s.bets + '</b><span>ставок</span></div>' +
+    '<div class="stat"><b>' + fmt(s.turnover) + '</b><span>оборот</span></div>' +
+    '<div class="stat"><b>' + fmt(s.paid) + '</b><span>выплачено</span></div>' +
+    '<div class="stat"><b>+' + fmt(s.best) + '</b><span>лучший выигрыш</span></div></div>' +
+    '<div class="p">Монеты игровые, без денежной стоимости. Пополнение и вывод недоступны.</div>');
+};
+
+async function showFair(revealed) {
+  const f = await api('/api/fair');
+  let rev = '';
+  if (revealed) rev = '<div class="lbl">Раскрытый серверный сид прошлой пары (бросков: ' + revealed.bets + ')</div>' +
+    '<div class="mono">' + esc(revealed.server_seed) + '</div>' +
+    '<div class="lbl">Клиентский сид прошлой пары</div><div class="mono">' + esc(revealed.client_seed) + '</div>';
+  openSheet('<h2>Честная игра <button data-close>✕</button></h2>' +
+    '<div class="p">Число каждой ставки определено до неё: сервер заранее показывает хэш своего сида, а сам сид раскрывает ' +
+    'после смены пары. Число = первые 8 hex-символов HMAC-SHA256(server_seed, «client_seed:nonce») по модулю 1 000 000.<br><br>' +
+    '«Меньше» выигрывает, если число &lt; шанс × 10 000, «Больше» — если число ≥ 1 000 000 − шанс × 10 000. ' +
+    'Выплата = ставка × RTP / шанс.</div>' + rev +
+    '<div class="lbl">Хэш серверного сида</div><div class="mono">' + esc(f.server_hash) + '</div>' +
+    '<div class="lbl">Ставок на этой паре (nonce): <b>' + f.nonce + '</b></div>' +
+    '<div class="lbl">Хэш СЛЕДУЮЩЕГО серверного сида</div><div class="mono">' + esc(f.next_hash) + '</div>' +
+    '<div class="lbl">Клиентский сид для новой пары: свой или оставь как есть</div>' +
+    '<div class="inp"><input id="cseed" maxlength="32" value="' + esc(f.client_seed) + '"></div>' +
+    '<button class="big" id="rot">Сменить пару сидов</button>');
+  $('rot').onclick = async () => {
+    try {
+      const r = await api('/api/rotate', {client_seed: $('cseed').value});
+      haptic('notificationOccurred', 'success'); showFair(r.revealed);
+    } catch (e) { toast(e.message); }
+  };
+}
+$('btnFair').onclick = () => showFair(null);
+
+(async () => {
+  try {
+    await loadMe(); await loadHistory();
+  } catch (e) {
+    $('name').textContent = 'Нет доступа'; $('sub').textContent = e.message;
+    $('list').innerHTML = '<div class="empty">' + esc(e.message) + '</div>';
+  }
+})();
+</script>
+</body>
+</html>
